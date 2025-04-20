@@ -12,38 +12,37 @@ bot = commands.Bot(command_prefix="$", intents=intents)
 async def on_ready():
     print(f"{bot.user} is online!")
 
-@bot.command(name='play', help='Plays a song from YouTube')
-async def play(ctx, url):
+@bot.command(name='play', help='Plays a song from YouTube (link or search)')
+async def play(ctx, *, query):
     if not ctx.author.voice:
         return await ctx.send("You need to be in a voice channel first.")
 
     voice_channel = ctx.author.voice.channel
 
-    # Connect to voice channel if not already
     if ctx.voice_client is None:
         vc = await voice_channel.connect()
     else:
         vc = ctx.voice_client
         await vc.move_to(voice_channel)
 
-    # Extract audio URL
+    # yt-dlp options
     ydl_opts = {
         'format': 'bestaudio',
         'quiet': True,
-        'no_warnings': True,
+        'noplaylist': True,
+        'default_search': 'ytsearch',
+        'source_address': '0.0.0.0'  # Fix IPv6 issues sometimes
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        stream_url = info['url']
+        info = ydl.extract_info(query, download=False)
+        if 'entries' in info:
+            info = info['entries'][0]  # First result from search
+        url = info['url']
         title = info.get('title', 'Unknown title')
 
-    # Play the audio using FFmpeg from remote source
-    ffmpeg_options = {
-        'options': '-vn'
-    }
-
-    source = await discord.FFmpegOpusAudio.from_probe(stream_url, **ffmpeg_options)
+    ffmpeg_opts = {'options': '-vn'}
+    source = await discord.FFmpegOpusAudio.from_probe(url, **ffmpeg_opts)
     vc.play(source)
 
     await ctx.send(f"Now playing: **{title}**")
