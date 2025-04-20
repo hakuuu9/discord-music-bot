@@ -13,7 +13,7 @@ bot = commands.Bot(command_prefix="$", intents=intents)
 async def on_ready():
     print(f"{bot.user} is online!")
 
-@bot.command(name='play', help='Plays a song from YouTube (link or search)')
+@bot.command(name='play', help='Plays a song from SoundCloud (or search term)')
 async def play(ctx, *, query):
     if not ctx.author.voice:
         return await ctx.send("You need to be in a voice channel first.")
