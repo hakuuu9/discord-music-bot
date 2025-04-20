@@ -3,3 +3,4 @@ youtube_dl
 pytube
 flask
 PyNaCl
+yt-dlp
