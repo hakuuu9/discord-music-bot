@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import yt_dlp
 import asyncio
+import os
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -25,19 +26,18 @@ async def play(ctx, *, query):
         vc = ctx.voice_client
         await vc.move_to(voice_channel)
 
-    # yt-dlp options
     ydl_opts = {
         'format': 'bestaudio',
         'quiet': True,
         'noplaylist': True,
         'default_search': 'ytsearch',
-        'source_address': '0.0.0.0'  # Fix IPv6 issues sometimes
+        'source_address': '0.0.0.0'
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(query, download=False)
         if 'entries' in info:
-            info = info['entries'][0]  # First result from search
+            info = info['entries'][0]
         url = info['url']
         title = info.get('title', 'Unknown title')
 
@@ -55,4 +55,4 @@ async def stop(ctx):
     else:
         await ctx.send("I'm not in a voice channel.")
 
-bot.run("YOUR_BOT_TOKEN")
+bot.run(os.environ["DISCORD_TOKEN"])
