@@ -1,6 +1,3 @@
 discord.py
-youtube_dl
-pytube
-flask
-PyNaCl
 yt-dlp
+python-dotenv
