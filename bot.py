@@ -3,47 +3,57 @@ from discord.ext import commands
 import yt_dlp
 import asyncio
 
-# Create bot instance
-bot = commands.Bot(command_prefix="$")
+intents = discord.Intents.default()
+intents.message_content = True
 
-# Event for when the bot is ready
+bot = commands.Bot(command_prefix="$", intents=intents)
+
 @bot.event
 async def on_ready():
-    print(f'{bot.user} has connected to Discord!')
+    print(f"{bot.user} is online!")
 
-# Command to join a voice channel and play music
 @bot.command(name='play', help='Plays a song from YouTube')
 async def play(ctx, url):
-    # Connect to voice channel
-    channel = ctx.author.voice.channel
-    voice_client = await channel.connect()
+    if not ctx.author.voice:
+        return await ctx.send("You need to be in a voice channel first.")
 
-    # yt-dlp options
+    voice_channel = ctx.author.voice.channel
+
+    # Connect to voice channel if not already
+    if ctx.voice_client is None:
+        vc = await voice_channel.connect()
+    else:
+        vc = ctx.voice_client
+        await vc.move_to(voice_channel)
+
+    # Extract audio URL
     ydl_opts = {
-        'format': 'bestaudio/best',
-        'extractaudio': True,
-        'audioquality': 1,
-        'outtmpl': 'downloads/%(id)s.%(ext)s',
-        'restrictfilenames': True,
-        'noplaylist': True,
+        'format': 'bestaudio',
         'quiet': True,
-        'logtostderr': False,
+        'no_warnings': True,
     }
 
-    # Download the audio using yt-dlp
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
-        url2 = info['formats'][0]['url']
-        voice_client.play(discord.FFmpegPCMAudio(url2))
+        stream_url = info['url']
+        title = info.get('title', 'Unknown title')
 
-    await ctx.send(f'Now playing: {info["title"]}')
+    # Play the audio using FFmpeg from remote source
+    ffmpeg_options = {
+        'options': '-vn'
+    }
 
-# Command to stop the music
-@bot.command(name='stop', help='Stops the music and disconnects from the voice channel')
+    source = await discord.FFmpegOpusAudio.from_probe(stream_url, **ffmpeg_options)
+    vc.play(source)
+
+    await ctx.send(f"Now playing: **{title}**")
+
+@bot.command(name='stop', help='Stops the music and disconnects')
 async def stop(ctx):
     if ctx.voice_client:
         await ctx.voice_client.disconnect()
-    await ctx.send('Music stopped and disconnected.')
+        await ctx.send("Stopped and disconnected.")
+    else:
+        await ctx.send("I'm not in a voice channel.")
 
-# Run the bot with the token
-bot.run('YOUR_BOT_TOKEN')
+bot.run("YOUR_BOT_TOKEN")
