@@ -1,58 +1,74 @@
 import discord
 from discord.ext import commands
-import yt_dlp
-import asyncio
-import os
+import wavelink
 
 intents = discord.Intents.default()
 intents.message_content = True
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-bot = commands.Bot(command_prefix="$", intents=intents)
+# Lavalink node settings
+LAVALINK_HOST = "lava.link"
+LAVALINK_PORT = 80
+LAVALINK_PASSWORD = "youshallnotpass"
 
 @bot.event
 async def on_ready():
-    print(f"{bot.user} is online!")
+    print(f"Logged in as {bot.user}")
+    await wavelink.NodePool.create_node(
+        bot=bot,
+        host=LAVALINK_HOST,
+        port=LAVALINK_PORT,
+        password=LAVALINK_PASSWORD,
+        region='us_central'
+    )
 
-@bot.command(name='play', help='Plays a song from SoundCloud (or search term)')
-async def play(ctx, *, query):
-    if not ctx.author.voice:
-        return await ctx.send("You need to be in a voice channel first.")
-
-    voice_channel = ctx.author.voice.channel
-
-    if ctx.voice_client is None:
-        vc = await voice_channel.connect()
+@bot.command()
+async def join(ctx):
+    if ctx.author.voice:
+        channel = ctx.author.voice.channel
+        await channel.connect(cls=wavelink.Player)
+        await ctx.send(f"Joined {channel.name}!")
     else:
-        vc = ctx.voice_client
-        await vc.move_to(voice_channel)
+        await ctx.send("You need to be in a voice channel first!")
 
-    ydl_opts = {
-        'format': 'bestaudio',
-        'quiet': True,
-        'noplaylist': True,
-        'default_search': 'ytsearch',
-        'source_address': '0.0.0.0'
-    }
+@bot.command()
+async def play(ctx, *, search: str):
+    vc: wavelink.Player = ctx.voice_client
+    if not vc:
+        if ctx.author.voice:
+            vc = await ctx.author.voice.channel.connect(cls=wavelink.Player)
+        else:
+            return await ctx.send("You're not in a voice channel!")
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(query, download=False)
-        if 'entries' in info:
-            info = info['entries'][0]
-        url = info['url']
-        title = info.get('title', 'Unknown title')
+    if not vc.is_connected():
+        await vc.connect(ctx.author.voice.channel)
 
-    ffmpeg_opts = {'options': '-vn'}
-    source = await discord.FFmpegOpusAudio.from_probe(url, **ffmpeg_opts)
-    vc.play(source)
+    track = await wavelink.YouTubeTrack.search(search, return_first=True)
+    await vc.play(track)
+    await ctx.send(f"Now playing: **{track.title}**")
 
-    await ctx.send(f"Now playing: **{title}**")
+@bot.command()
+async def pause(ctx):
+    if ctx.voice_client and ctx.voice_client.is_playing():
+        await ctx.voice_client.pause()
+        await ctx.send("Paused the song.")
 
-@bot.command(name='stop', help='Stops the music and disconnects')
+@bot.command()
+async def resume(ctx):
+    if ctx.voice_client and ctx.voice_client.is_paused():
+        await ctx.voice_client.resume()
+        await ctx.send("Resumed the song.")
+
+@bot.command()
 async def stop(ctx):
     if ctx.voice_client:
-        await ctx.voice_client.disconnect()
-        await ctx.send("Stopped and disconnected.")
-    else:
-        await ctx.send("I'm not in a voice channel.")
+        await ctx.voice_client.stop()
+        await ctx.send("Stopped the song.")
 
-bot.run(os.environ["DISCORD_TOKEN"])
+@bot.command()
+async def leave(ctx):
+    if ctx.voice_client:
+        await ctx.voice_client.disconnect()
+        await ctx.send("Left the voice channel.")
+
+bot.run("YOUR_BOT_TOKEN")
