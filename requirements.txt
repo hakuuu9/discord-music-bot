@@ -1,2 +1,2 @@
 discord.py==2.3.2
-wavelink==2.5.1
+yt-dlp
