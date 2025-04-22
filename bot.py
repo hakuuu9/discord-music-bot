@@ -6,6 +6,7 @@ import wavelink
 # Ensure custom ffmpeg binary works on Render
 os.environ["PATH"] = os.getcwd() + "/ffmpeg:" + os.environ["PATH"]
 
+
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
