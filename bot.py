@@ -1,9 +1,9 @@
-from discord.ext import commands
-import yt_dlp
-import asyncio
 import os
+import discord
+from discord.ext import commands
+import wavelink
 
-# Point ffmpeg to the local binary
+# Ensure custom ffmpeg binary works on Render
 os.environ["PATH"] = os.getcwd() + "/ffmpeg:" + os.environ["PATH"]
 
 intents = discord.Intents.default()
@@ -13,48 +13,61 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
+    # Connect to Lavalink node
+    await wavelink.NodePool.connect(
+        client=bot,
+        host='lava.link',  # Use your own Lavalink if you set one up
+        port=80,
+        password='youshallnotpass',
+        https=False
+    )
 
 @bot.command()
 async def join(ctx):
-    if ctx.author.voice:
-        channel = ctx.author.voice.channel
-        await channel.connect()
-        await ctx.send(f"🎶 Joined {channel.name}!")
-    else:
-        await ctx.send("❌ You must be in a voice channel.")
+    if ctx.author.voice is None:
+        return await ctx.send("❌ You are not in a voice channel.")
+    
+    vc = ctx.author.voice.channel
+    player: wavelink.Player = await vc.connect(cls=wavelink.Player)
+    await ctx.send(f"🔊 Joined {vc.name}")
 
 @bot.command()
-async def play(ctx, *, query):
-    if not ctx.author.voice:
-        return await ctx.send("❌ Join a voice channel first.")
+async def play(ctx, *, search: str):
+    player: wavelink.Player = wavelink.NodePool.get_node().get_player(ctx.guild)
 
-    voice = ctx.voice_client
-    if not voice:
-        voice = await ctx.author.voice.channel.connect()
+    if not player.is_connected():
+        if ctx.author.voice:
+            await ctx.invoke(bot.get_command("join"))
+        else:
+            return await ctx.send("❌ You're not in a voice channel.")
 
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'quiet': True,
-        'default_search': 'auto',  # supports SoundCloud & YouTube
-        'noplaylist': True
-    }
+    track = await wavelink.YouTubeTrack.search(search, return_first=True)
+    await player.play(track)
+    await ctx.send(f"🎶 Now playing: **{track.title}**")
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(query, download=False)
-        if "entries" in info:
-            info = info["entries"][0]  # first result
-        url = info["url"]
-        title = info.get("title", "Unknown track")
+@bot.command()
+async def pause(ctx):
+    player: wavelink.Player = wavelink.NodePool.get_node().get_player(ctx.guild)
+    await player.pause()
+    await ctx.send("⏸ Paused.")
 
-    source = await discord.FFmpegOpusAudio.from_probe(url, method='fallback')
-    voice.play(source)
-    await ctx.send(f"🎵 Now playing: **{title}**")
+@bot.command()
+async def resume(ctx):
+    player: wavelink.Player = wavelink.NodePool.get_node().get_player(ctx.guild)
+    await player.resume()
+    await ctx.send("▶️ Resumed.")
 
 @bot.command()
 async def stop(ctx):
-    if ctx.voice_client:
-        await ctx.voice_client.disconnect()
-        await ctx.send("👋 Left the voice channel.")
+    player: wavelink.Player = wavelink.NodePool.get_node().get_player(ctx.guild)
+    await player.stop()
+    await ctx.send("⏹ Stopped playback.")
 
-# Token from Render environment
+@bot.command()
+async def leave(ctx):
+    player: wavelink.Player = wavelink.NodePool.get_node().get_player(ctx.guild)
+    await player.disconnect()
+    await ctx.send("👋 Left the voice channel.")
+
+# Run the bot
 bot.run(os.getenv("DISCORD_TOKEN"))
