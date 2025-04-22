@@ -4,6 +4,9 @@ import yt_dlp
 import asyncio
 import os
 
+# Point ffmpeg to the local binary
+os.environ["PATH"] = os.getcwd() + "/ffmpeg:" + os.environ["PATH"]
+
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
